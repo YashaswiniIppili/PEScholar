@@ -48,7 +48,7 @@ cursor.execute('''CREATE TABLE IF NOT EXISTS citations (
 cursor.execute('''CREATE TABLE IF NOT EXISTS publications (
                     scholar_id VARCHAR(255),
                     title TEXT,
-                    pub_year VARCHAR(10),
+                    pub_year VARCHAR(4),
                     author TEXT,
                     journal TEXT,
                     publisher TEXT,
@@ -60,9 +60,35 @@ cursor.execute('''CREATE TABLE IF NOT EXISTS publications (
 
 # Commit changes
 conn.commit()
+
+# Read data from Excel files and insert into tables
+professors_data = pd.read_excel('professors.xlsx').values.tolist()
+citations_data = pd.read_excel('citations.xlsx').values.tolist()
+publications_data = pd.read_excel('publications.xlsx').values.tolist()
+
+# Insert data into Professors table
+insert_query = "INSERT IGNORE INTO professors (scholar_id, name, affiliation, email_domain) VALUES (%s, %s, %s, %s)"
+cursor.executemany(insert_query, professors_data)
+
+# Insert data into Citations table
+insert_query = '''INSERT IGNORE INTO citations (scholar_id, citedby, citedby5y, hindex, hindex5y, i10index, i10index5y,
+                    cites_per_year_2023, cites_per_year_2022, cites_per_year_2021, cites_per_year_2020, cites_per_year_2019,
+                    cites_per_year_2018, cites_per_year_2017, cites_per_year_2016, cites_per_year_2015, cites_per_year_2014)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)'''
+cursor.executemany(insert_query, citations_data)
+
+# Insert data into Publications table
+insert_query = '''INSERT IGNORE INTO publications (scholar_id, title, pub_year, author, journal, publisher, conference,
+                    num_citations, pub_url) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)'''
+cursor.executemany(insert_query, publications_data)
+
+# Commit changes and close connection
+conn.commit()
 conn.close()
 
-st.title('Professor Information System')
+print("Tables created successfully in the 'dbms_project' database and data inserted, handling duplicate entries.")
+
+st.title('Professors Publications Management System')
 
 # Establish MySQL connection to perform queries
 conn = mysql.connector.connect(
@@ -77,20 +103,29 @@ cursor = conn.cursor()
 cursor.execute("SELECT name FROM professors")
 professor_names = [row[0] for row in cursor.fetchall()]
 
-# User input: Select a professor from the dropdown
-selected_professor = st.selectbox('Select a professor:', professor_names)
+# Remove None values (if any)
+professor_names = [name for name in professor_names if name is not None]
 
+# Sort the names in alphabetical order
+if professor_names:
+    professor_names.sort()
+else:
+    # Handle the case when no names are retrieved
+    st.error("No professor names found.")
+
+# User input: Select a professor from the dropdown
+selected_professor = st.selectbox('Select a Professor:', professor_names)
 # User input: Select information category
-selected_category = st.selectbox('Select category:', ['About', 'Citations', 'Publications'])
+selected_category = st.selectbox('Select a Category:', ['About', 'Citations', 'Publications'])
 
 # Function to retrieve data based on selected professor and category
 def retrieve_data(selected_professor, selected_category):
     if selected_category == 'About':
         cursor.execute(f"SELECT * FROM professors WHERE name = '{selected_professor}'")
     elif selected_category == 'Citations':
-        cursor.execute(f"SELECT * FROM citations WHERE scholar_id IN (SELECT scholar_id FROM professors WHERE name = '{selected_professor}')")
+        cursor.execute(f"SELECT DISTINCT * FROM citations WHERE scholar_id IN (SELECT scholar_id FROM professors WHERE name = '{selected_professor}')")
     elif selected_category == 'Publications':
-        cursor.execute(f"SELECT * FROM publications WHERE scholar_id IN (SELECT scholar_id FROM professors WHERE name = '{selected_professor}')")
+        cursor.execute(f"SELECT DISTINCT * FROM publications WHERE scholar_id IN (SELECT scholar_id FROM professors WHERE name = '{selected_professor}')")
 
     result = cursor.fetchall()
     return result
