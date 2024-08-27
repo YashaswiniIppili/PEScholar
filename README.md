@@ -1,4 +1,4 @@
-## DBMS Project (5th Sem) <br>
+## DBMS Project (5th Semester) <br>
 
 Research Paper Management System for all the professors in CSE Department.
 
